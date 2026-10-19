@@ -1,0 +1,13 @@
+{
+  "name": "@pvme/parser-playground",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p tsconfig.json && vite build"
+  },
+  "dependencies": {
+    "@pvme/guide-parser": "0.1.0"
+  }
+}

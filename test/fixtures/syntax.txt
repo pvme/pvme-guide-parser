@@ -1,0 +1,38 @@
+# __Syntax fixture__
+.tag:root
+*Italic with **bold** and __underline__.* **Bold with *italic*.** ***Both*** ~~strike~~ ||spoiler||
+Inline `code <:literal:1>` and `` `literal ticks` ``; \*escaped\*.
+⬥ First
+    • Second
+        ⬩ Third <:magic:123> <a:wave:456>
+⬥ Another
+
+1) Number
+    a) Letter
+        ⬩ Bullet
+2) Next
+
+> ## __Quoted heading__
+> Quote with <#123> <@456> <@!789> <@&111> @here @everyone <id:customize>.
+
+[wiki](<https://runescape.wiki/w/Thing_(item)>) <https://example.com> https://example.com
+[section]($linkmsg_root$) $data_pvme:Perks!A1$ $data_link:123:meter$ {{channel:id}}
+![image](https://example.com/a.png)
+_ _
+..literal dot
+.file:https://example.com/data.txt
+.img:https://example.com/a.png
+.react:✅
+.pin:delete
+.
+```ts
+.tag:literal
+const x = '<:literal:1>';
+```
+```same-line code```
+{
+  "content": "hello",
+  "embeds": [{ "description": "[section]($linkmsg_root$) {{channel:id}}" }]
+}
+.embed:json
+.blank:

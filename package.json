@@ -1,0 +1,21 @@
+{
+  "name": "pvme-guide-parser-workspace",
+  "private": true,
+  "workspaces": [
+    "module",
+    "playground"
+  ],
+  "scripts": {
+    "dev": "npm run build -w @pvme/guide-parser && npm run dev -w @pvme/parser-playground --",
+    "build": "npm run build -w @pvme/guide-parser && npm run build -w @pvme/parser-playground",
+    "test": "npm run build -w @pvme/guide-parser && vitest run --dir test",
+    "corpus": "npm run build -w @pvme/guide-parser && node test/corpus.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^5.7.2",
+    "vite": "^6.4.4",
+    "vitest": "^4.1.12"
+  },
+  "version": "0.0.2"
+}

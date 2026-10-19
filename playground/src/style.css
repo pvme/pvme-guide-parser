@@ -1,0 +1,37 @@
+/* Match Guide Editor: slate-900 shell, Dracula editor, blue-600 controls. */
+:root { color-scheme: dark; font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; color: #e2e8f0; background: #0f172a; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+#app { height: 100vh; min-height: 600px; display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+h1 { margin: 0; font-size: 18px; font-weight: 600; color: #fff; }
+h2 { margin: 0; padding: 8px 12px; font-size: 14px; font-weight: 500; background: #1e293b; border-bottom: 1px solid #334155; }
+p { margin: 0; }
+.hint, #status { color: #94a3b8; font-size: 12px; }
+label { display: flex; align-items: center; gap: 8px; color: #cbd5e1; }
+button, select { border: 1px solid #1d4ed8; border-radius: 4px; padding: 8px 12px; font: inherit; color: #fff; background: #2563eb; cursor: pointer; }
+button:hover, select:hover { background: #1d4ed8; }
+button:active { background: #1e40af; }
+option { background: #1e293b; color: #e2e8f0; }
+:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
+main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 2fr; gap: 16px; }
+section { min-width: 0; min-height: 0; border: 1px solid #334155; border-radius: 4px; overflow: hidden; background: #282a36; }
+main section { display: flex; flex-direction: column; }
+textarea, #json { flex: 1; min-height: 0; width: 100%; margin: 0; padding: 12px; overflow: auto; border: 0; background: #282a36; color: #f8f8f2; }
+textarea, pre, #json { font: 13px/1.6 ui-monospace, Consolas, monospace; tab-size: 4; }
+textarea { resize: none; }
+textarea:focus-visible, #json:focus-visible { outline-offset: -2px; }
+::selection { background: #214283; color: #fff; }
+pre { margin: 0; }
+#json { white-space: pre; }
+.json-children { padding-left: 20px; border-left: 1px solid #44475a; }
+summary { cursor: pointer; color: #93c5fd; }
+summary:hover { background: #343746; }
+details pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.diagnostics { flex-shrink: 0; max-height: 170px; }
+#diagnostics { padding: 10px 12px; max-height: 125px; overflow: auto; font-size: 12px; color: #94a3b8; }
+#diagnostics button { display: block; width: 100%; margin: 3px 0; padding: 5px 8px; text-align: left; border-color: #475569; background: #334155; font: 12px/1.5 ui-monospace, Consolas, monospace; }
+#diagnostics button:hover { background: #475569; }
+#diagnostics [data-severity=error] { color: #f87171; }
+#diagnostics [data-severity=warning] { color: #fbbf24; }
+@media (max-width: 850px) { #app { height: auto; min-height: 100vh; } header { flex-wrap: wrap; } main { grid-template-columns: 1fr; } main section { height: 50vh; } }
