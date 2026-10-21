@@ -1,6 +1,6 @@
 {
   "name": "@pvme/guide-parser",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Shared, platform-neutral parser for PVME guide text",
   "type": "module",
   "main": "./dist/index.js",

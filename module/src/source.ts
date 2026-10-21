@@ -1,5 +1,5 @@
 import type { Diagnostic, SourcePosition, SourceRange } from "./types.js";
-export interface Line { text: string; start: number; end: number }
+export interface Line { text: string; start: number; end: number; offsets?: number[] }
 export class Source {
   readonly lines: Line[] = [];
   readonly diagnostics: Diagnostic[] = [];

@@ -29,7 +29,7 @@ export interface CommandBlock extends Located { type: "command" | "unknown-comma
 export type BlockNode = ParagraphBlock | HeadingBlock | BlankBlock | CodeBlock | QuoteBlock | ListBlock | SubtextBlock | AttachmentBlock | EmbedBlock | CommandBlock;
 export interface GuideAnchor { tag: string; heading: string | null; headingLevel: number | null; sectionId: string | null; messageIndex: number; range: SourceRange }
 export interface GuideSection { id: string; heading: string; level: number; parentId: string | null; messageIndex: number; tags: string[]; range: SourceRange }
-export interface GuideMessage extends Located { index: number; blocks: BlockNode[]; anchors: GuideAnchor[]; pin: string | null; reactions: string[]; explicitBlank: boolean }
+export interface GuideMessage extends Located { /** Command-stripped, dot-unescaped text; never padded. */ content: string; index: number; blocks: BlockNode[]; anchors: GuideAnchor[]; pin: string | null; reactions: string[]; explicitBlank: boolean }
 export interface ParseOptions { /** Host-provided tags; no network resolution is performed. */ externalTags?: readonly string[]; /** Defaults to true. */ validateReferences?: boolean }
 export interface GuideDocument {
   type: "document"; schemaVersion: 1; source: string; range: SourceRange;

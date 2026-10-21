@@ -14,6 +14,7 @@ Parse PVME guide text into a structured, JSON-serialisable document for websites
 - [Reading the result](#reading-the-result)
 - [Supported syntax](#supported-syntax)
 - [Commands and metadata](#commands-and-metadata)
+- [Discord text serialization](#discord-text-serialization)
 - [Source positions](#source-positions)
 - [Diagnostics](#diagnostics)
 - [Complete TypeScript types](#complete-typescript-types)
@@ -35,9 +36,9 @@ import { parseGuide, type GuideDocument, type ParseOptions } from '@pvme/guide-p
 
 const source = [
   '# __Equipment__',
-  '.tag:equipment',
   '⬥ **Bring food**',
   '⬥ Equip your weapon',
+  '.tag:equipment',
   '.',
   'See $linkmsg_equipment$.',
 ].join('\n');
@@ -53,7 +54,7 @@ console.log(guide.diagnostics);              // []
 
 ## API and options
 
-`parseGuide` is the only runtime export. All types listed below are available as named type exports from `@pvme/guide-parser`. Internal block/inline parsing helpers are not part of the public API; there are no public subpath exports.
+Import `parseGuide`, `serializeDiscordMessage` and the public types from `@pvme/guide-parser`. Internal helpers have no public subpath exports.
 
 ```ts
 import type { GuideDocument, ParseOptions } from '@pvme/guide-parser';
@@ -61,7 +62,9 @@ import type { GuideDocument, ParseOptions } from '@pvme/guide-parser';
 declare function parseGuide(text: string, options?: ParseOptions): GuideDocument;
 ```
 
-The function is synchronous and deterministic. Pass the complete guide as a string; read files or fetch content in your app before calling it. Malformed guide syntax is normally preserved in the result with diagnostics rather than rejected.
+`parseGuide` is synchronous and deterministic. Pass the complete guide as a string; your app handles files and network requests.
+
+Malformed syntax is usually kept in the result with diagnostics.
 
 | Option | Default | Behavior |
 | --- | --- | --- |
@@ -87,7 +90,9 @@ The result is a tree of messages, blocks and inline nodes, plus indexes for comm
 | `separators` | Ranges of message separator lines. |
 | `diagnostics` | Warnings and errors sorted by source offset, then diagnostic code. |
 
-Render `messages[].blocks` in order. The document-level indexes refer to content already in the tree: rendering them again duplicates content. In particular, a valid `.img:` or `.file:` produces both a command block and an attachment block; render the attachment as media and treat the command as metadata.
+Render `messages[].blocks` in order. The document indexes point to the same content, so rendering both would duplicate it.
+
+For `.img:` and `.file:`, render the attachment block as media and treat the command block as metadata.
 
 Blocks and inline nodes use a `type` field to identify their shape. Lists contain `items`, whose `children` are blocks. Quotes also contain blocks. Paragraphs, headings and subtext contain inline nodes. Styles and links can contain more inline nodes.
 
@@ -121,15 +126,39 @@ console.log(paragraphs.length); // 2
 
 ### Messages, sections and tags
 
-A line whose trimmed text is exactly `.` separates messages, except inside a fenced code block. Headings, tags and attachments do not create message boundaries. Empty segments between adjacent separators do not create messages; separator ranges are still retained.
+The PVME scanner runs before Markdown. A column-1 dot followed only by whitespace separates messages, even inside code fences or multiline quotes. A column-1 `..` escapes exactly one dot, including inside fences. Indented dots remain literal.
+
+Once commands begin, the next content line starts a new message. Blank lines and escaped-dot lines count as content.
+
+The scanner also:
+
+- Keeps empty segments before, between and after separators.
+- Removes CR characters and ignores exactly one final LF from semantic text.
+- Preserves the original input in `source`, `raw` and ranges.
+
+`message.content` keeps the Markdown text, with commands removed, dot escapes applied and line endings normalized. Exactly one final file newline is ignored.
+
+For JSON embeds, it holds the envelope's string `content`, or empty text. Use this field for publication; `message.raw` is the original source slice.
 
 A `GuideMessage` describes a source segment, not the number of Discord API sends. Your bot may need to split a segment for platform limits or text/image ordering. `index` and `messageIndex` are zero-based.
 
-Headings produce sections. `parentId` points to the preceding enclosing heading with a lower level. A section extends until the next heading of the same or lower level, or the end of the document, and may span messages. IDs currently use `section-<source offset>`; they can change after edits.
+Headings produce sections:
 
-A `.tag:` attaches to the latest preceding section, even across message separators. With no preceding heading it still creates an anchor for the current message, with null heading/section fields and a warning. Duplicate tags remain in message anchors, but `guide.tags` keeps the first definition and reports an error. Tag matching is case-sensitive.
+- `parentId` identifies the enclosing heading with a lower level.
+- A section ends at the next heading of the same or lower level, or at the document end. It can span messages.
+- IDs use `section-<source offset>` and can change after edits.
 
-Message metadata comes from valid commands: `pin` holds the last pin parameter, `reactions` collects reaction parameters, and `explicitBlank` records `.blank:`. No metadata executes an action on its own.
+A `.tag:` belongs to its message and links to the latest preceding section, even across separators. Without a heading, its heading and section fields are null.
+
+Only one tag is allowed per message. Duplicate names across messages produce an error; `guide.tags` keeps the first definition. Tag matching is case-sensitive.
+
+Valid commands populate message metadata:
+
+- `pin`: the last pin parameter.
+- `reactions`: the reaction parameters.
+- `explicitBlank`: always false; retained for API compatibility. `.blank:` is not legacy syntax.
+
+Metadata does not execute actions.
 
 ## Supported syntax
 
@@ -142,7 +171,7 @@ This is a PVME/Discord-oriented parser, not a general CommonMark implementation.
 | `> quote`, `>>> multiline quote` | Blockquotes; `>>>` consumes the remaining lines in the source message. Nested quotes and quoted lists are supported. |
 | `-# small print` | Subtext block. |
 | Bullet, number and letter markers | List blocks with nested block content; see below. |
-| Fences of three or more backticks or tildes | Literal code blocks, including same-line fences. An optional language is retained. |
+| Fences of three or more backticks or tildes | Code blocks after PVME scanning, including same-line fences. An optional language is retained. |
 | `**bold**`, `*italic*`, `_italic_`, `__underline__`, `~~strike~~` | Style nodes, including nested formatting. |
 | `\|\|spoiler\|\|` | Spoiler style node. |
 | Backtick-delimited inline code | Literal `inline-code` node. |
@@ -157,7 +186,7 @@ This is a PVME/Discord-oriented parser, not a general CommonMark implementation.
 | `{{channel:id}}` | Template reference; other template names are retained with a warning. |
 | `_ _` | Spacer node. |
 | Backslash before punctuation | Literal escaped character. |
-| `..tag:literal` at block level | Escapes one leading dot, producing literal `.tag:literal` text. |
+| `..tag:literal` at column 1 | Escapes one leading dot, producing literal `.tag:literal` text. |
 
 Discord IDs and timestamp values remain strings to avoid numeric precision loss. Links retain their URLs as supplied; your app must decide how to resolve or display them. The parser does not sanitise HTML or URLs for rendering.
 
@@ -171,20 +200,23 @@ A marker at the start of an item's text on the same line is literal. For example
 
 ## Commands and metadata
 
-Commands are recognised at the top block level of a message. Recursive parsing of list and quote content does not handle commands; fenced and inline code is literal. An indented command line can end a top-level list and be handled as a top-level command. Command names are lowercased and parameters trimmed. The colon is required, including for empty parameters.
+Commands start at column 1 and are processed before Markdown, including code fences.
+
+- Names are case-sensitive and require a colon.
+- Spaces immediately after the colon belong to the parameter.
+- Trailing command whitespace is removed from the parameter but kept in `raw`.
 
 | Command | Behavior |
 | --- | --- |
-| `.tag:name` | Creates an anchor; requires a nonempty name. Names outside letters, digits, `_` and `-` are retained with a warning. |
-| `.img:https://example.com/image.png` | Creates an image attachment; requires a whitespace-free HTTP(S) URL. Angle-bracket URLs are also accepted. |
-| `.file:https://example.com/file.txt` | Creates a file attachment with the same URL rules. |
-| `.pin:` | Stores an empty pin parameter; your consumer decides the action. |
-| `.pin:delete` | Stores `"delete"`. Other values are preserved with `LEGACY_PIN_VALUE`. |
-| `.react:emoji` | Collects a nonempty reaction parameter as supplied. |
-| `.blank:` | Sets `explicitBlank: true`; its parameter must be empty. |
-| `.embed:json` | Closes a preceding JSON payload; without one, reports a malformed command. |
+| `.tag:name` | One tag per message; empty names are accepted by the reference. Noncanonical names are retained with a warning. No heading is required. |
+| `.img:https://example.com/image.png` | Image attachment; one attachment total across `.img:` and `.file:` per message. Uses the checker's permissive HTTP(S) substring validation. |
+| `.file:https://example.com/file.txt` | File attachment, sharing the same limit. Angle-bracket URL wrappers are removed from the attachment URL. |
+| `.pin:` / `.pin:delete` | Only empty and `delete` parameters are valid. |
+| `.react:emoji` | Collects the parameter literally, including an empty value. |
+| `.embed:` | Accepted legacy marker; leaves text unchanged. |
+| `.embed:json` | Parses the entire preceding message content as JSON. |
 
-Unknown commands produce `unknown-command` blocks with `valid: false`. Known malformed commands remain `command` blocks with `valid: false`.
+`.blank:` and differently cased names such as `.TAG:` are unknown commands. Unknown and malformed commands are preserved with `valid: false` and error diagnostics. Extra tags/attachments remain as invalid command nodes; they do not create extra anchors/attachments.
 
 ### JSON embeds
 
@@ -195,9 +227,48 @@ Place the JSON before its marker:
 .embed:json
 ```
 
-The parser preserves the complete parsed JSON value, including any `content`, `embed` or `embeds` wrapper. It does not validate Discord's embed schema. Invalid JSON produces an embed with `valid: false`, `value: null` and an `INVALID_EMBED_JSON` diagnostic. The marker also becomes a command block.
+The parser keeps the full JSON value, including `content`, `embed` and `embeds` wrappers. It does not validate Discord's embed schema.
+
+Invalid JSON produces `valid: false`, `value: null` and an `INVALID_EMBED_JSON` diagnostic. The marker also becomes a command block.
 
 References in JSON strings are indexed without replacing their values. Their positions map to the original JSON source, including escape sequences.
+
+## Discord text serialization
+
+```ts
+import { parseGuide, serializeDiscordMessage } from '@pvme/guide-parser';
+
+const doc = parseGuide('Hello\n$linkmsg_intro$');
+const text = serializeDiscordMessage(doc.messages[0], {
+  resolveTag: tag => `https://discord.com/channels/1/2/${tag === 'intro' ? '3' : '4'}`,
+});
+```
+
+`serializeDiscordMessage(message, options?)` returns text ready for Discord. It replaces `$linkmsg_tag$` everywhere, including code, using `options.resolveTag(tag)`.
+
+Supply a resolver when links occur, and have it reject unresolved tags. The editor's AST reference index still excludes code.
+
+After substitution, the serializer adds zero-width spaces (`\u200B`):
+
+- Empty text becomes `\u200B`.
+- An initial space or LF gets a leading `\u200B`.
+- A final LF gets a trailing `\u200B`.
+
+Other whitespace stays unchanged. Text over 2000 UTF-16 code units throws `RangeError`. Apply other substitutions before this final check.
+
+Serialization leaves source, ranges, AST and `message.content` unchanged. Your app sends attachments and embeds.
+
+The options type is exported as `DiscordSerializationOptions`:
+
+```ts
+interface DiscordSerializationOptions {
+  resolveTag: (tag: string) => string;
+}
+declare function serializeDiscordMessage(
+  message: Pick<GuideMessage, 'content'>,
+  options?: DiscordSerializationOptions,
+): string;
+```
 
 ## Source positions
 
@@ -208,7 +279,11 @@ All content nodes extend `Located`, with `raw` and `range`. `source` is never no
 - `range.end` is exclusive.
 - `startLine` and `endLine` repeat the endpoint line numbers for convenience.
 
-For a located node, `source.slice(range.start.offset, range.end.offset) === raw`. Use `value` or `children` for interpreted content: `raw` includes delimiters and may include intervening prefixes/indentation in multiline nodes. Parent and child ranges may overlap. Section ranges describe whole section extents, while heading block ranges cover the heading itself.
+Every located node satisfies `source.slice(range.start.offset, range.end.offset) === raw`.
+
+Use `value` or `children` for interpreted content. `raw` may include delimiters, prefixes and indentation. Parent and child ranges can overlap.
+
+Section ranges cover whole sections; heading ranges cover only the heading.
 
 ```ts
 import { parseGuide } from '@pvme/guide-parser';
@@ -228,19 +303,21 @@ if (quote.type === 'blockquote') {
 
 ## Diagnostics
 
-Each diagnostic has a string `code`, human-readable `message`, `severity` and source `range`. Prefer codes and severities for program logic. Your app decides whether warnings or errors block saving or publishing. Not every unrecognised or unmatched punctuation sequence emits a diagnostic; some remain ordinary text.
+Each diagnostic includes a `code`, `message`, `severity` and source `range`. Use codes and severities in program logic; your app decides which diagnostics block saving or publishing.
+
+Some unrecognised punctuation remains ordinary text without a diagnostic.
 
 | Code | Severity | Meaning |
 | --- | --- | --- |
+| `MULTIPLE_MESSAGE_TAGS` | error | More than one tag in a message. |
+| `MULTIPLE_MESSAGE_ATTACHMENTS` | error | More than one image/file attachment in a message. |
 | `DUPLICATE_TAG` | error | A tag was defined more than once; the first lookup entry is retained. |
 | `INVALID_EMBED_JSON` | error | Embed payload cannot be parsed as JSON. |
 | `MALFORMED_COMMAND` | error | A known command has missing/invalid parameters or an embed marker lacks its payload. |
 | `UNCLOSED_CODE_FENCE` | error | A fenced code block has no closing fence. |
 | `MISSING_TAG` | warning | A tag reference is absent from this guide and `externalTags`. |
-| `TAG_WITHOUT_HEADING` | warning | An anchor has no preceding section. |
 | `NONCANONICAL_TAG` | warning | A legacy tag name uses noncanonical characters. |
-| `LEGACY_PIN_VALUE` | warning | Pin parameter is neither empty nor `delete`. |
-| `UNKNOWN_COMMAND` | warning | A command name is not recognised. |
+| `UNKNOWN_COMMAND` | error | A command name is not recognised. |
 | `MALFORMED_REFERENCE` | warning | Recognised reference syntax is malformed. |
 | `MALFORMED_EMOJI` | warning | Recognised custom emoji syntax is malformed. |
 | `MALFORMED_MENTION` | warning | Recognised mention/timestamp syntax is malformed. |
@@ -418,6 +495,7 @@ export interface GuideSection {
     range: SourceRange;
 }
 export interface GuideMessage extends Located {
+    content: string;
     index: number;
     blocks: BlockNode[];
     anchors: GuideAnchor[];
@@ -480,8 +558,24 @@ npm run dev
 npm run corpus -- ../pvme-guides
 ```
 
-The playground shows parsed data and diagnostics. After editing parser source, run `npm run build -w @pvme/guide-parser` to refresh the linked package. Set `PVME_GUIDES_PATH` to a local guide checkout to include the full corpus in `npm test`.
+The playground shows parsed data and diagnostics. After editing parser source, run `npm run build -w @pvme/guide-parser` to refresh the linked package. Use `npm run corpus -- <local-guide-checkout>` to check the full corpus.
 
 The package also builds independently with `npm install` and `npm run build` inside `module/`. `npm pack` runs the build through `prepack`. The package contains `dist/`, the CLI, this README and package metadata; import through the public package entry.
 
-Releases follow semantic versioning. Breaking public API changes require a major package version; breaking AST changes also increment `schemaVersion`. Package version and schema version are separate. Source offsets and derived section IDs can change whenever source text changes, so reparse after editing rather than treating old ranges as live anchors.
+Releases follow semantic versioning. Breaking public API changes require a major package version; breaking AST changes also increment `schemaVersion`.
+
+Package and schema versions are separate. Reparse after edits: source offsets and section IDs can change.
+
+### Intentional differences from the legacy syntax checker
+
+- JSON embed envelopes and all embeds remain intact; string `content` is not truncated by the checker's unconditional `.slice(1)`. The broken array-to-number multiple-embed check is not copied. No Discord embed schema validation is implied.
+- Rich Markdown AST nodes, source ranges and additional diagnostics remain. Code fences split by PVME syntax may produce `UNCLOSED_CODE_FENCE`; they never prevent message segmentation.
+- A second tag/attachment is invalid and creates no second anchor/attachment, rather than exposing contradictory metadata on erroneous input. Even an empty first tag consumes the one-tag slot.
+- Missing references and noncanonical tags can emit additional diagnostics. Code references stay literal in the editor AST, while Discord text serialization performs the legacy global link substitution.
+- Length checks and padding run through the shared serializer, after real link resolution, rather than mutating parser input or assuming placeholder URLs.
+
+`test/legacy.test.ts` checks message counts for five real-guide fixtures. Its optional reference test compares command/tag ownership and serialized text directly.
+
+Set `PVME_SYNTAX_CHECKER_PATH` to a local `syntax.js`, or use the detected path `../pvme/syntax-checker/syntax.js`.
+
+The synthetic `syntax.txt` includes invalid legacy syntax and remains a playground sample.
